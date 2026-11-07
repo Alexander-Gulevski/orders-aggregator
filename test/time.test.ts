@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateAtOffset, datesBetween, isCalendarDate, parseUtc, tzOffsetMinutes } from "../src/utils/time.js";
+import { dateAtOffset, datesBetween, isCalendarDate, localDate, parseUtc, tzOffsetMinutes } from "../src/utils/time.js";
 
 describe("parseUtc", () => {
   it("строка с Z", () => {
@@ -40,5 +40,22 @@ describe("даты", () => {
 
   it("datesBetween включает границы", () => {
     expect(datesBetween("2026-02-27", "2026-03-02")).toEqual(["2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02"]);
+  });
+});
+
+describe("localDate", () => {
+  it("дата в таймзоне клиента", () => {
+    expect(localDate("Europe/Moscow", new Date("2026-02-10T21:30:00Z"))).toBe("2026-02-11");
+    expect(localDate("Europe/Moscow", new Date("2026-02-10T20:30:00Z"))).toBe("2026-02-10");
+    expect(localDate("America/New_York", new Date("2026-02-11T03:30:00Z"))).toBe("2026-02-10");
+  });
+
+  it("учитывает переход на летнее время: смещение берётся на момент заказа, а не «сейчас»", () => {
+    // Europe/Berlin: 29.03.2026 01:00Z часы переводят с UTC+1 на UTC+2
+    expect(tzOffsetMinutes("Europe/Berlin", new Date("2026-03-28T12:00:00Z"))).toBe(60);
+    expect(tzOffsetMinutes("Europe/Berlin", new Date("2026-03-30T12:00:00Z"))).toBe(120);
+    // до перехода 22:30Z — ещё тот же день, после перехода 22:30Z — уже следующий
+    expect(localDate("Europe/Berlin", new Date("2026-03-27T22:30:00Z"))).toBe("2026-03-27");
+    expect(localDate("Europe/Berlin", new Date("2026-03-30T22:30:00Z"))).toBe("2026-03-31");
   });
 });

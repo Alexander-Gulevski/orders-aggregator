@@ -12,21 +12,47 @@ export function parseUtc(raw: unknown): Date {
   return d;
 }
 
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Форматтер календарных полей в зоне `timeZone`; Intl.DateTimeFormat дорогой в создании — кэшируем. */
+function formatter(timeZone: string): Intl.DateTimeFormat {
+  let f = formatters.get(timeZone);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    formatters.set(timeZone, f);
+  }
+  return f;
+}
+
+function wallClock(timeZone: string, at: Date) {
+  const parts = formatter(timeZone).formatToParts(at);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute"), second: get("second") };
+}
+
 /** Смещение таймзоны относительно UTC в минутах в момент `at` (Europe/Moscow → 180). */
 export function tzOffsetMinutes(timeZone: string, at: Date): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(at);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  const w = wallClock(timeZone, at);
+  const asUtc = Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
   return Math.round((asUtc - Math.floor(at.getTime() / 1000) * 1000) / 60_000);
+}
+
+/**
+ * Календарная дата (YYYY-MM-DD) момента `at` в зоне `timeZone`.
+ * Учитывает смещение именно в этот момент — в зонах с летним временем оно меняется в течение года.
+ */
+export function localDate(timeZone: string, at: Date): string {
+  const w = wallClock(timeZone, at);
+  return `${w.year}-${String(w.month).padStart(2, "0")}-${String(w.day).padStart(2, "0")}`;
 }
 
 /** Календарная дата (YYYY-MM-DD) момента `at` при смещении `offsetMinutes`. */
